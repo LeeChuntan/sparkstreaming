@@ -26,11 +26,26 @@ object MyConf {
 
   final val ResultTable: String  = "t_result"
 
-  final val mysql_table_model:String = "t_analsmodel"
+  final val mysql_table_model: String = "t_analsmodel"
 
   final val mysql_table_sys: String = "t_monitor_info"
 
   final val mysql_table_usernameIp: String = "t_usernameIp"
+
+  //异常状态配置 '类型1-异常ip认证2-异常时间认证3-认证失败4-越权访问5-访问超时',
+  final val abnor_status: Int = 1             //异常状态值
+  final val nor_status: Int = 0               //正常状态值
+  final val nor: String = "0"                 //正常类型
+  final val whiteList: String = "1"           //白名单异常类型
+  final val abnor_Time: String = "2"          //异常时间段异常类型
+  final val landingFail: String = "3"         //认证失败异常类型
+  final val nor_level: Int = 0                //正常情况下异常等级
+
+  //读取异常等级和规则配置分类设置
+ final val modeld_white: Int = 1              //白名单异常模型编号
+  final val modeld_time: Int = 3              //异常时间点异常模型编号
+  final val modeld_landing: Int =4            //认证url配置模型编号
+
 
   //ES的host
   final val es_host:String = "s1"
