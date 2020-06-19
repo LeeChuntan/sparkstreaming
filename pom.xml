@@ -23,6 +23,13 @@
             <scope>compile</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.scalikejdbc</groupId>
+            <artifactId>scalikejdbc_2.11</artifactId>
+            <version>3.4.2</version>
+        </dependency>
+
+
 
 
 

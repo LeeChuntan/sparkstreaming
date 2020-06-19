@@ -1,10 +1,11 @@
 package sparkstreaming
 
-import conf.MyConf
+import conf.{LoadModeConfing, MyConf, ScalikejdbcConfig}
 import util.DBUtil
 import util.KafkaUtil
 import db.AssociatedQuery
 import java.lang
+
 import sparkstreaming.SparkstreamingBusiness
 import util.MySqlQuery
 import db.ReadTable
@@ -23,8 +24,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, KafkaUtils, OffsetRange}
 import com.mysql.jdbc.Driver
+import dao.AnalsmodelDao
 import kafka.utils.ZKGroupTopicDirs
 import org.apache.spark.sql.types.DateType
+
 import scala.collection.mutable
 import scala.collection.mutable.{HashMap, Map}
 
@@ -36,6 +39,14 @@ class SparkStreamingKafka
 object SparkStreamingKafka {
 
   def main(args: Array[String]): Unit = {
+    // 1. 配置数据库连接
+    ScalikejdbcConfig.config()
+
+    // 2. 定期加载模型配置
+    LoadModeConfing.load();
+
+    //val ipList = AnalsmodelDao.getWhieList()
+
     /**
       * kafka 配置参数 设置消费主体
       */
