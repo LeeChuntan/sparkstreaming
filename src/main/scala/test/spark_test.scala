@@ -1,12 +1,11 @@
 package test
 
-import db.AssociatedQuery
 import java.text.SimpleDateFormat
 
 import com.alibaba.fastjson.JSON
 import com.mysql.jdbc.Driver
 import conf.MyConf
-import db.{DBredis, ReadTable}
+import db.DBredis
 import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.{SparkConf, SparkContext}

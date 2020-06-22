@@ -1,7 +1,6 @@
 package util
 
 import conf.MyConf
-import db.ReadTable
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 object MySqlQuery {

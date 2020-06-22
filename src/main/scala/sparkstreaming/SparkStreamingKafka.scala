@@ -1,14 +1,11 @@
 package sparkstreaming
 
-import conf.{LoadModeConfing, MyConf, ScalikejdbcConfig}
+import conf.MyConf
 import util.DBUtil
 import util.KafkaUtil
-import db.AssociatedQuery
 import java.lang
 
-import sparkstreaming.SparkstreamingBusiness
-import util.MySqlQuery
-import db.ReadTable
+import BusinessAnalysis.{SparkStreamingIdentification, SparkstreamingBusiness}
 import org.I0Itec.zkclient.ZkClient
 import com.alibaba.fastjson.JSON
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -24,8 +21,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, KafkaUtils, OffsetRange}
 import com.mysql.jdbc.Driver
-import dao.AnalsmodelDao
 import kafka.utils.ZKGroupTopicDirs
+import method.{AssociatedQueryConf, QueryAbnorLevel, ReadTable}
 import org.apache.spark.sql.types.DateType
 
 import scala.collection.mutable
@@ -39,14 +36,6 @@ class SparkStreamingKafka
 object SparkStreamingKafka {
 
   def main(args: Array[String]): Unit = {
-    // 1. 配置数据库连接
-    ScalikejdbcConfig.config()
-
-    // 2. 定期加载模型配置
-    LoadModeConfing.load();
-
-    //val ipList = AnalsmodelDao.getWhieList()
-
     /**
       * kafka 配置参数 设置消费主体
       */
@@ -70,91 +59,29 @@ object SparkStreamingKafka {
     val streamingContext = new StreamingContext(sc, Durations.seconds(3))
     val sqlc = new SQLContext(sc)
 
+    //创建定时更新需要的对象
+    var AreaTable: DataFrame = null
+    var listIp: List[String] = null
+    var mapUrlConf: Map[String, List[String]] = null
+    var listUrl: List[String] = null
+    var listError: List[String] = null
+    var listServerIp: List[String] = null
+    var listPort: List[String] = null
+    var systemCode: DataFrame = null
+    var sysPortIp: Map[String, List[String]] = null
+    var allServerIp: List[String] = null
+    var allServerport: List[String] = null
+    var timeMap: Map[String, String] = null
+    var failLevel: Int = 0
+    var AbnormalIpLevel: Int = 0
+    var AbnormalTimeLevel: Int = 0
+
+    //最后更新时间
+    var lastupdate: Long = 0L
+
     //隐式转换需要
     val spark = SparkSession.builder().config(conf).getOrCreate()
     import spark.implicits._
-
-    /**
-      * 加载需要的配置
-      * 1.地区表
-      * 2.白名单
-      * 3.系统特征表
-      * 4.加载端口系统设置表
-      * 5.异常时间段设定表
-      */
-
-    //1.加载地区表
-    val AreaTable = ReadTable.ReadTable(conf, MyConf.mysql_table_area)
-    AreaTable.cache()
-    AreaTable.createOrReplaceTempView("area")
-
-    //2.得到白名单关联表 解析出非名单内IP
-    val datawhite = MySqlQuery.SqlQuery(conf, sc, MyConf.modeld_white)
-    val rddwhite = datawhite.rdd
-    var mapIp: Map[String,Int] = Map()
-    var AbnormalIpLevel = 0
-    rddwhite.collect().foreach(row =>{
-      val jsonstr = row.getAs[String]("jsonstr").toString
-      val data = JSON.parseArray(jsonstr)
-      AbnormalIpLevel = row.getAs[Int]("level")
-//      AbnormalIpLevel = level
-      val size: Int= data.size()
-      for (i <- 0 to size-1) {
-        val nObject = data.getJSONObject(i)
-        val str = nObject.getString("ip")
-        mapIp += (str  ->  AbnormalIpLevel)
-      }
-    })
-    val listIp =  mapIp.map(_._1).toList
-    println(mapIp)
-
-    //3.解析出url规则  错误状态返回码
-    val dataPort = MySqlQuery.SqlQuery(conf, sc, MyConf.modeld_landing)
-    val rddPort = dataPort.rdd
-    var mapSeverIp: Map[String,Int] = Map()
-    var mapPort: Map[String,Int] = Map()
-    var mapError: Map[String,Int] = Map()
-    var mapUrl: Map[String,Int] = Map()
-    var failLevel = 0
-    rddPort.collect().foreach(row =>{
-      val jsonstr = row.getAs[String]("jsonstr").toString
-      val data = JSON.parseArray(jsonstr)
-      val level = row.getAs[Int]("level")
-      failLevel = level
-      val size: Int= data.size()
-      for (i <- 0 to size-1) {
-        val nObject = data.getJSONObject(i)
-        val port = nObject.getString("port")
-        val serverIp = nObject.getString("ip")
-        val error = nObject.getString("error")
-        val url = nObject.getString("url")
-        mapSeverIp += (serverIp -> level)
-        mapPort += (port  -> level)
-        mapError += (error -> level)
-        mapUrl += (url -> level)
-      }
-    })
-    val listUrl = mapUrl.map(_._1).toList
-    val listError = mapError.map(_._1).toList
-    val listServerIp = mapSeverIp.map(_._1).toList
-    val listPort =  mapPort.map(_._1).toList
-    val identificationFailLevel = mapUrl.map(_._2)
-
-
-    //4.提取所有服务系统端口 服务地址
-    val systemCode = ReadTable.ReadTable(conf,MyConf.mysql_table_sys)
-    systemCode.createOrReplaceTempView("sys")
-    var mapPortIp: Map[String,String] = Map()
-    systemCode.collect().foreach(row =>{
-      val ip = row.getAs[String]("ip")
-      val port = row.getAs[String]("port")
-      mapPortIp += (port -> ip)
-    })
-    val allServerIp = mapPortIp.map(_._2).toList.distinct
-    val allServerport = mapPortIp.map(_._1).toList.distinct
-
-    //5.获取异常时间模型
-    val timeMap = AssociatedQuery.AssociatedQueryTime(conf, sqlc)
 
     /**
       * kafka参数配置
@@ -196,12 +123,44 @@ object SparkStreamingKafka {
         println("数据接受")
         df.show()
 
+        //判断时间
+        if (System.currentTimeMillis() - lastupdate > MyConf.update_conf){
+          println("定时执行")
+
+          //加载地区表
+          AreaTable = ReadTable.getTable(conf, MyConf.mysql_table_area)
+          AreaTable.createOrReplaceTempView("area")
+
+          //2.得到白名单关联表 解析出非名单内IP
+          listIp = AssociatedQueryConf.getNormalIpList(conf, sqlc)
+          //获取白名单异常等级
+          AbnormalIpLevel = AssociatedQueryConf.AbnormalIpLevel
+
+          //3.解析出url规则  错误状态返回码
+          mapUrlConf = AssociatedQueryConf.getIdentUrlConf(conf, sqlc)
+          //获取认证失败异常等级
+          failLevel = AssociatedQueryConf.failLevel
+          listUrl = mapUrlConf.get("url").get
+          listError = mapUrlConf.get("error").get
+          listServerIp = mapUrlConf.get("serverIp").get
+          listPort =  mapUrlConf.get("port").get
+
+          //4.提取所有服务系统端口 服务地址
+          systemCode = ReadTable.getTable(conf,MyConf.mysql_table_sys)
+          systemCode.createOrReplaceTempView("sys")
+          sysPortIp = AssociatedQueryConf.getSystemIpPort(conf, sqlc, systemCode)
+          allServerIp = sysPortIp.get("iplist").get
+          allServerport = sysPortIp.get("portlist").get
+
+          //5.获取异常时间模型
+          timeMap = AssociatedQueryConf.getAbnormalTimeMap(conf, sqlc)
+          AbnormalTimeLevel = AssociatedQueryConf.abnorTimeLevel
+          lastupdate = System.currentTimeMillis()
+        }
+
         //将dataframe识别的字段提取出来，观察是否存在需要字段
         val ColumnsList = df.columns.toList
-        /**
-          * 接收数据准备  该流量是否存在destination,query,http
-          */
-        if (ColumnsList.contains("query") && ColumnsList.contains("http") && ColumnsList.exists(word => word == "destination")) {
+        if (ColumnsList.contains("query") && ColumnsList.contains("http") && ColumnsList.contains("destination")) {
           //得到访问服务的全部流量   匹配上面提取出的服务系统地址和端口
           val dfData = df.filter($"destination.port".isin(allServerport:_*) && $"destination.ip".isin(allServerIp:_*))
           val data = dfData.select($"source.ip" as "ip",
@@ -215,18 +174,8 @@ object SparkStreamingKafka {
           println("提取元素输出")
           data.show()
 
-          //修改提取时间  时间格式转换
-//          dataFlow.createOrReplaceTempView("data")
-//          val data = sqlc.sql("select ip, serviceIp, port, SUBSTR(`requestTime`,1,10) as requestTime, url, query, status_code from data")
-//          data.show()
-
-
           if (!data.rdd.isEmpty()) {
-//            val VisitFlow = data.filter($"port".isin(listPort: _*) && $"serviceIp".isin(listServerIp: _*) && $"status_code".isNotNull)
-
             data.createOrReplaceTempView("flow")
-            println("访问服务元素输出")
-            data.show()
 
             //将访问服务的流量与地址信息进行匹配
             val AreaIpMatching = sqlc.sql(
@@ -266,27 +215,27 @@ object SparkStreamingKafka {
               print("发起认证的流量")
               IdentificationFlow.show()
 
-              val identFail = SparkStreamingIdentification.IdentificationCheck(IdentificationFlow, conf, sqlc)
+              val identFail = SparkStreamingIdentification.getIdentificationFail(IdentificationFlow, conf, sqlc)
               //传入数据集、异常等级、异常类型、异常状态
               println("输出异常等级：" + failLevel)
-              //            DBUtil.insertIndentificationFailIntoMysqlByJdbc(identFail)
               if (!identFail.rdd.isEmpty()) {
                 DBUtil.insertAnorDataIntoMysqlByJdbc(identFail, failLevel, MyConf.landingFail, MyConf.abnor_status)
               }
 
               //第五次过滤 正常流量匹配
               val identSuccessFlow = normalIp.filter(!$"status_code".isin(listError: _*) && $"url".isin(listUrl: _*))
-              val identSuccess = SparkStreamingIdentification.IdentificationSuccess(identSuccessFlow, conf, sqlc)
+              val identSuccess = SparkStreamingIdentification.getIdentificationSuccess(identSuccessFlow, conf, sqlc)
 
               //将用户名和IP映射关系存进redis
               DBUtil.insertUserIpIntoRedis(identSuccess)
-              DBUtil.insertNnorDataIntoMysqlByJdbc(identSuccess, MyConf.nor_level, MyConf.nor, MyConf.nor_status, timeMap)
+              DBUtil.insertNnorDataIntoMysqlByJdbc(identSuccess, AbnormalTimeLevel, MyConf.nor_level, MyConf.nor_type, MyConf.nor_status, timeMap)
             }
 
             //登录成功 进入业务操作的流量
             val businessFlow = PortMatching.filter($"sysid" !== 1)
 //            SparkstreamingBusiness.businessAnalysis(conf, sqlc, businessFlow)
             DBUtil.insertBusinessIntoMysql(businessFlow)
+
           }
         }
         for (o <- offsetRanges) {

@@ -1,10 +1,7 @@
-package sparkstreaming
+package BusinessAnalysis
 
-import conf.MyConf
-import org.apache.spark.sql.{DataFrame, SQLContext}
-import db.{DBredis, ReadTable}
 import org.apache.spark.SparkConf
-import redis.clients.jedis.Jedis
+import org.apache.spark.sql.{DataFrame, SQLContext}
 
 /**
   * 业务操作流量

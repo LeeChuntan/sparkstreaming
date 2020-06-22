@@ -35,16 +35,18 @@ object MyConf {
   //异常状态配置 '类型1-异常ip认证2-异常时间认证3-认证失败4-越权访问5-访问超时',
   final val abnor_status: Int = 1             //异常状态值
   final val nor_status: Int = 0               //正常状态值
-  final val nor: String = "0"                 //正常类型
+  final val nor_type: String = "0"            //正常类型
   final val whiteList: String = "1"           //白名单异常类型
   final val abnor_Time: String = "2"          //异常时间段异常类型
   final val landingFail: String = "3"         //认证失败异常类型
+  final val landing_timeOut: String = "5"     //持续登录失败认证
   final val nor_level: Int = 0                //正常情况下异常等级
 
   //读取异常等级和规则配置分类设置
- final val modeld_white: Int = 1              //白名单异常模型编号
+  final val modeld_white: Int = 1              //白名单异常模型编号
   final val modeld_time: Int = 3              //异常时间点异常模型编号
   final val modeld_landing: Int =4            //认证url配置模型编号
+  final val ident_timeOut: Int = 300        //认证时间阀值 设定五分钟
 
 
   //ES的host
@@ -56,8 +58,8 @@ object MyConf {
   //ES的index和type
   final val es_index_type:String = "sparkstreaming/lee"
 
-  final val update_conf: Long = 10000L
-
+  //配置更新时间 三分钟
+  final val update_conf: Long = 180000L
   //redis配置
   final val REDIS_CONFIG: Map[String, String] = Map("host" -> "s3", "port" -> "6379", "timeout" -> "10000", "passwd" -> "123456")
 }

@@ -20,7 +20,7 @@ public class Utc2Timestamp {
             date = date.replace("Z", " UTC");
             SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS Z");
             Date dt = format.parse(date);
-            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
             String format1 = df.format(dt);
             return format1;
         } catch (Exception e) {
